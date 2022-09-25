@@ -20,6 +20,12 @@ import random
 from DB import query
 import socks
 
+LIGHT_cost = 4900
+STANDART_cost = 5900
+PRO_cost = 6900
+
+
+
 ## characters to generate password from
 characters = list(string.ascii_letters.lower() + string.digits)
 digits = list(string.digits)
@@ -56,17 +62,16 @@ ACCOUNTS = []
 
 
 def load_accounts():
-    rows = query("SELECT username,password,firstname,lastname,balance,email,phone,tarif FROM users")
+    rows = query("SELECT username,password,firstname,lastname,email,phone,tarif FROM users")
     for row in rows:
         account1 = ACCOUNT()
         account1.username = row[0]
         account1.password = row[1]
         account1.firstname = row[2]
         account1.lastname = row[3]
-        account1.balance = row[4]
-        account1.email = row[5]
-        account1.phone = row[6]
-        account1.tarif = row[7]
+        account1.email = row[4]
+        account1.phone = row[5]
+        account1.tarif = row[6]
         account1.path = os.getcwd() + "/users/"+account1.username
 
         if os.path.exists(account1.path)==False:
@@ -118,7 +123,7 @@ async def clientthread(conn, addr):
                             for row in rows:
                                 ms += str(row[0])+"/"+str(row[1])+"/"+str(row[2])+"/"+str(row[3]).split(".")[0]+"/"+str(row[4]).split(".")[0]+"/"+str(row[5])+"/"+str(row[6])+"/"+str(row[7])+";"
                             ms = ms[:-1]
-                            send("login_success|"+acc.firstname+"|"+acc.lastname+"|"+acc.email+"|"+acc.balance+"|"+tg+"|"+ms+"|"+acc.phone+"|"+acc.tarif)
+                            send("login_success|"+acc.firstname+"|"+acc.lastname+"|"+acc.email+"|0|"+tg+"|"+ms+"|"+acc.phone+"|"+acc.tarif)
                             nf = False
                             break
                         else:
@@ -176,7 +181,7 @@ async def clientthread(conn, addr):
                                       str(row[3]).split(".")[0] + "/" + str(row[4]).split(".")[0] + "/" + str(
                                     row[5]) + "/" + str(row[6]) + "/" + str(row[7]) + ";"
                             ms = ms[:-1]
-                            send("login_code|" + acc.firstname + "|" + acc.lastname + "|" + acc.email + "|" + acc.balance + "|" + tg + "|" + ms + "|" + acc.phone + "|" + acc.tarif)
+                            send("login_code|" + acc.firstname + "|" + acc.lastname + "|" + acc.email + "|0|" + tg + "|" + ms + "|" + acc.phone + "|" + acc.tarif)
                             break;
             case "send_code":
                 account.my_proxy = get_proxy(account.username)
@@ -405,18 +410,68 @@ with TelegramClient('userbot1', 3442047, "cacb39d73070900d11d07fe14a476394") as 
 
     @events.register(events.NewMessage(chats=[265299531]))
     async def msg_handler(event: events.NewMessage.Event):
-        chat = event.chat
-        sender = await event.get_sender()
         message = event.message
         print(message)
         fname = message.message.split("\nName: ")[1].split("\n")[0]
         email =message.message.split("\nEmail: ")[1].split("\n")[0]
         phone =message.message.split("\nPhone: ")[1].split("\n")[0]
         tarif =message.message.split("\n1. ")[1].split("\n")[0]
-
-
-        email_receiver = email
         new_password = gen_new_password()
+
+        rows = query("SELECT tarif,tarif_time from users WHERE email='"+email+"'")
+        if rows is not None:
+            if len(rows)>0:
+                user = rows[0]
+                print(user)
+                now = time.time()
+                old = user[1].timestamp()
+                print(now,old)
+                прошло = int(now-old)
+                осталось=(86400*30)-прошло
+                print(осталось)
+                t1 = 3
+                t2 = 3
+                if 'LIGHT' in user[0]:
+                    t1=1
+                elif 'STANDART' in user[0]:
+                    t1=2
+                if 'LIGHT' in tarif:
+                    t2=1
+                elif 'STANDART' in tarif:
+                    t2=2
+                if(t2>t1):
+                    print("Повышает тариф")
+                    стоимость_старого_тарифа = STANDART_cost
+                    стоимость_нового_тарифа = PRO_cost
+                    if t1==1:
+                        стоимость_старого_тарифа= LIGHT_cost
+                        стоимость_нового_тарифа=STANDART_cost
+                    осталось_денег=стоимость_старого_тарифа/(86400) * (осталось/30)
+                    деньги = стоимость_нового_тарифа+осталось_денег
+                    new_timestamp = ((деньги * 30 * 86400) / стоимость_нового_тарифа) + now
+                    new_datetime = datetime.fromtimestamp(new_timestamp)
+                    query("UPDATE users SET tarif_time=(TIMESTAMP '"+str(new_datetime).split(".")[0]+"') WHERE email='"+email+"'")
+                elif t1==t2:
+                    print("Продлевает тариф")
+                    query("UPDATE users SET tarif_time=tarif_time+interval '30 day' WHERE email='"+email+"'")
+                else:
+                    print("Понижает тариф")
+                    стоимость_старого_тарифа = PRO_cost
+                    стоимость_нового_тарифа = STANDART_cost
+                    if t1 == 1:
+                        стоимость_старого_тарифа = STANDART_cost
+                        стоимость_нового_тарифа = LIGHT_cost
+                    осталось_денег = стоимость_старого_тарифа / (86400) * (осталось / 30)
+                    деньги = стоимость_нового_тарифа + осталось_денег
+                    new_timestamp = ((деньги * 30 * 86400) / стоимость_нового_тарифа) + now
+                    new_datetime = datetime.fromtimestamp(new_timestamp)
+                    query("UPDATE users SET tarif_time=(TIMESTAMP '" + str(new_datetime).split(".")[
+                        0] + "') WHERE email='" + email + "'")
+
+                return
+        '''
+        email_receiver = email
+
         subject = 'Ваши данные для авторизации'
         body = "Привет "+fname+". Поздравляем с приобретением тарифа "+tarif+".\nВаш пароль:"+new_password+"\nВы можете скачать приложение по ссылке: какая то ссылка"
         em = EmailMessage()
@@ -425,13 +480,12 @@ with TelegramClient('userbot1', 3442047, "cacb39d73070900d11d07fe14a476394") as 
         em['Subject'] = subject
         em.set_content(body)
         send_email(email_sender,email_receiver,em.as_string())
-
+        '''
         account1 = ACCOUNT()
         account1.username = email
         account1.password = new_password
         account1.firstname = fname
         account1.lastname = ""
-        account1.balance = "0"
         account1.email = email
         account1.phone = phone
         account1.tarif = tarif
@@ -440,7 +494,7 @@ with TelegramClient('userbot1', 3442047, "cacb39d73070900d11d07fe14a476394") as 
         print("Phone:", phone)
         print("Tarif:", tarif)
         account1.path = os.getcwd() + "/users/" + account1.username
-        query("INSERT INTO users (username,password,firstname,lastname,balance,email,phone,tarif) VALUES('"+email+"','"+new_password+"','"+fname+"','','0','"+email+"','"+phone+"','"+tarif+"')")
+        query("INSERT INTO users (username,password,firstname,lastname,email,phone,tarif,tarif_time) VALUES('"+email+"','"+new_password+"','"+fname+"','','"+email+"','"+phone+"','"+tarif+"',now()::timestamp)")
         if os.path.exists(account1.path)==False:
             os.makedirs(account1.path+"/accounts")
         ACCOUNTS.append(account1)
