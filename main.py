@@ -21,8 +21,11 @@ from DB import query
 import socks
 
 LIGHT_cost = 4900
+LIGHT_limit = 10
 STANDART_cost = 5900
+STANDART_limit = 25
 PRO_cost = 6900
+PRO_limit = 50
 
 
 
